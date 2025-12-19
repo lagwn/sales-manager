@@ -664,10 +664,10 @@ function render() {
 
             tr.innerHTML = `
                 <td style="text-align: center;" onclick="event.stopPropagation()">
-                    <input type="checkbox" ${p.isInvoiced ? 'checked' : ''} onchange="toggleInvoice(${p.id})">
+                    <input type="checkbox" ${p.isInvoiced ? 'checked' : ''} onchange="toggleInvoice('${p.id}')">
                 </td>
                 <td style="text-align: center;" onclick="event.stopPropagation()">
-                    <input type="checkbox" ${p.isPaid ? 'checked' : ''} onchange="togglePaid(${p.id})">
+                    <input type="checkbox" ${p.isPaid ? 'checked' : ''} onchange="togglePaid('${p.id}')">
                 </td>
                 <td>${p.date}</td>
                 <td><div style="font-weight:600;">${escapeHtml(p.name)}</div></td>
@@ -678,8 +678,8 @@ function render() {
                 <td class="text-right" style="font-weight:bold; color: ${profit >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatCurrency(profit)}</td>
                 <td class="text-right" onclick="event.stopPropagation()">
                     <div style="display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-end;">
-                        <button class="btn btn-sm" onclick="editProject(${p.id})" style="background:#fff; border:1px solid #ddd; width: 50px; justify-content: center; padding: 0.2rem;">編集</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteProject(${p.id})" style="width: 50px; justify-content: center; padding: 0.2rem;">削除</button>
+                        <button class="btn btn-sm" onclick="editProject('${p.id}')" style="background:#fff; border:1px solid #ddd; width: 50px; justify-content: center; padding: 0.2rem;">編集</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProject('${p.id}')" style="width: 50px; justify-content: center; padding: 0.2rem;">削除</button>
                     </div>
                 </td>
             `;
