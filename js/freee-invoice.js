@@ -53,14 +53,23 @@ function loadTokens() {
         const tokens = JSON.parse(saved);
         FreeeApp.accessToken = tokens.accessToken;
         FreeeApp.refreshToken = tokens.refreshToken;
+        // 事業所IDも復元
+        if (tokens.companyId && !FreeeApp.settings.companyId) {
+            FreeeApp.settings.companyId = tokens.companyId;
+            document.getElementById('companyId').value = tokens.companyId;
+        }
     }
 }
 
-function saveTokens() {
-    localStorage.setItem(TOKEN_KEY, JSON.stringify({
+function saveTokens(companyId = null) {
+    const data = {
         accessToken: FreeeApp.accessToken,
         refreshToken: FreeeApp.refreshToken
-    }));
+    };
+    if (companyId) {
+        data.companyId = companyId;
+    }
+    localStorage.setItem(TOKEN_KEY, JSON.stringify(data));
 }
 
 // --- Event Listeners ---
@@ -138,10 +147,9 @@ async function handleAuth() {
         return;
     }
 
-    showLoading('freeeに接続中...');
+    showLoading('freeeに接続中...\nブラウザでfreeeにログインしてください。');
 
     try {
-        // Use Electron IPC to handle OAuth
         if (window.freeeAPI) {
             const result = await window.freeeAPI.authenticate(
                 FreeeApp.settings.clientId,
@@ -151,21 +159,62 @@ async function handleAuth() {
             if (result.success) {
                 FreeeApp.accessToken = result.accessToken;
                 FreeeApp.refreshToken = result.refreshToken;
-                saveTokens();
+
+                // 事業所IDが返ってきたら設定
+                if (result.companyId) {
+                    FreeeApp.settings.companyId = result.companyId.toString();
+                    document.getElementById('companyId').value = result.companyId;
+                    saveSettings();
+                }
+
+                saveTokens(result.companyId);
                 updateAuthStatus();
-                showResult('freeeに接続しました', 'success');
+                showResult('freeeに接続しました！', 'success');
+
+                // 自動で見積書を取得
+                if (FreeeApp.settings.companyId) {
+                    fetchQuotations();
+                }
             } else {
                 showResult('認証に失敗しました: ' + result.error, 'error');
             }
         } else {
-            // Fallback for browser testing - simulate auth
-            showResult('Electronアプリで実行してください。ブラウザモードでは認証できません。', 'error');
+            showResult('Electronアプリで実行してください。', 'error');
         }
     } catch (error) {
         showResult('認証エラー: ' + error.message, 'error');
     } finally {
         hideLoading();
     }
+}
+
+// トークンをリフレッシュ
+async function refreshAccessToken() {
+    if (!FreeeApp.refreshToken) {
+        return false;
+    }
+
+    try {
+        if (window.freeeAPI) {
+            const result = await window.freeeAPI.refreshToken(
+                FreeeApp.settings.clientId,
+                FreeeApp.settings.clientSecret,
+                FreeeApp.refreshToken
+            );
+
+            if (result.success) {
+                FreeeApp.accessToken = result.accessToken;
+                FreeeApp.refreshToken = result.refreshToken;
+                saveTokens();
+                updateAuthStatus();
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('Token refresh error:', error);
+    }
+
+    return false;
 }
 
 // --- Quotations ---
@@ -184,13 +233,25 @@ async function fetchQuotations() {
 
     try {
         if (window.freeeAPI) {
-            const result = await window.freeeAPI.getQuotations(
+            let result = await window.freeeAPI.getQuotations(
                 FreeeApp.accessToken,
                 FreeeApp.settings.companyId
             );
 
+            // トークンが期限切れの場合はリフレッシュして再試行
+            if (!result.success && result.error && result.error.includes('401')) {
+                const refreshed = await refreshAccessToken();
+                if (refreshed) {
+                    result = await window.freeeAPI.getQuotations(
+                        FreeeApp.accessToken,
+                        FreeeApp.settings.companyId
+                    );
+                }
+            }
+
             if (result.success) {
                 FreeeApp.quotations = result.quotations;
+                FreeeApp.selectedIds.clear();
                 renderQuotations();
                 showResult(`${result.quotations.length}件の見積書を取得しました`, 'success');
             } else {
@@ -233,13 +294,16 @@ function renderQuotations() {
                    onchange="toggleQuotation(${q.id}, this.checked)">
             <div class="quotation-info">
                 <span class="quotation-title">${escapeHtml(q.title || q.quotation_number || '(無題)')}</span>
-                <span class="quotation-client">${escapeHtml(q.partner_name || '(取引先未設定)')}</span>
+                <span class="quotation-client">${escapeHtml(q.partner_name || q.company_name || '(取引先未設定)')}</span>
             </div>
             <span class="quotation-date">${q.issue_date || '-'}</span>
-            <span class="quotation-amount">${formatCurrency(q.total_amount || 0)}</span>
+            <span class="quotation-amount">${formatCurrency(q.total_amount || q.total_vat || 0)}</span>
             <span style="color: #6b7280; font-size: 0.8rem;">#${q.id}</span>
         </div>
     `).join('');
+
+    updateSelectedCount();
+    updateConvertButton();
 }
 
 window.toggleQuotation = function (id, checked) {
@@ -260,7 +324,7 @@ window.toggleQuotation = function (id, checked) {
 
     // Update select all checkbox
     const checkboxes = document.querySelectorAll('.quotation-checkbox:not(#selectAll)');
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
     document.getElementById('selectAll').checked = allChecked;
 };
 
@@ -280,6 +344,11 @@ async function convertToInvoices() {
         return;
     }
 
+    if (!FreeeApp.accessToken) {
+        showResult('先にfreeeに接続してください', 'error');
+        return;
+    }
+
     // Get invoice date option
     const dateOption = document.querySelector('input[name="invoiceDate"]:checked').value;
     let invoiceDate;
@@ -293,7 +362,7 @@ async function convertToInvoices() {
         invoiceDate = formatDate(lastDayPrevMonth);
     }
 
-    showLoading('請求書に変換中...');
+    showLoading(`請求書に変換中...\n(${FreeeApp.selectedIds.size}件)`);
 
     try {
         const selectedQuotations = FreeeApp.quotations.filter(q => FreeeApp.selectedIds.has(q.id));
@@ -308,13 +377,29 @@ async function convertToInvoices() {
             });
 
             if (result.success) {
-                showResult(`${result.convertedCount}件の請求書を作成し、PDFをダウンロードしました。\n保存先: ${result.savePath}`, 'success');
+                let message = `✅ ${result.convertedCount}件の請求書を作成しました。\n保存先: ${result.savePath}`;
+
+                if (result.errors && result.errors.length > 0) {
+                    message += `\n\n⚠️ エラー:\n${result.errors.join('\n')}`;
+                }
+
+                showResult(message, 'success');
+
+                // 成功した分の選択を解除
                 FreeeApp.selectedIds.clear();
                 updateSelectedCount();
                 updateConvertButton();
-                renderQuotations();
+
+                // チェックボックスをリセット
+                document.querySelectorAll('.quotation-checkbox').forEach(cb => cb.checked = false);
+                document.querySelectorAll('.quotation-item').forEach(item => item.classList.remove('selected'));
+
+                // フォルダを開くか確認
+                if (confirm('保存先フォルダを開きますか？')) {
+                    window.freeeAPI.openFolder(result.savePath);
+                }
             } else {
-                showResult('変換に失敗しました: ' + result.error, 'error');
+                showResult('変換に失敗しました:\n' + result.error, 'error');
             }
         } else {
             // Demo mode
@@ -347,13 +432,14 @@ function hideLoading() {
 function showResult(message, type) {
     const el = document.getElementById('resultMessage');
     el.textContent = message;
+    el.style.whiteSpace = 'pre-wrap';
     el.className = `result-message ${type}`;
 
-    // Auto hide after 5 seconds for success
+    // Auto hide after 10 seconds for success
     if (type === 'success') {
         setTimeout(() => {
             el.className = 'result-message';
-        }, 5000);
+        }, 10000);
     }
 }
 
