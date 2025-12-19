@@ -183,10 +183,14 @@ const Storage = {
     },
 
     // Download from Cloud
-    syncFromCloud: async () => {
-        if (!supabaseClient) return alert('クラウド接続の設定がありません');
+    syncFromCloud: async (silent = false) => {
+        if (!supabaseClient) {
+            if (!silent) alert('クラウド接続の設定がありません');
+            return;
+        }
 
-        if (!confirm('クラウドから最新データを取得して、現在の表示を上書き更新しますか？\n（PC内のデータはクラウドの内容に置き換わります）')) return;
+        // silent（自動更新）でない場合のみ確認を出す
+        if (!silent && !confirm('クラウドから最新データを取得して、現在の表示を上書き更新しますか？\n（PC内のデータはクラウドの内容に置き換わります）')) return;
 
         try {
             const { data, error } = await supabaseClient
@@ -198,6 +202,9 @@ const Storage = {
 
             if (data) {
                 const cloudProjects = data.map(Storage.fromDB);
+
+                // 変更があるか簡易チェック（件数と最終更新日時...はないのでJSON文字列比較するなど）
+                // ここでは単純に上書きする
                 App.projects = cloudProjects;
 
                 // Save to local immediately
@@ -209,14 +216,46 @@ const Storage = {
 
                 render();
                 updateClientSuggestions();
-                alert(`クラウドから${cloudProjects.length}件のデータを取得・更新しました！`);
+
+                if (!silent) {
+                    alert(`クラウドから${cloudProjects.length}件のデータを取得・更新しました！`);
+                } else {
+                    console.log('Auto-updated from cloud');
+                }
             } else {
-                alert('クラウドにデータがありませんでした');
+                if (!silent) alert('クラウドにデータがありませんでした');
             }
         } catch (err) {
             console.error(err);
-            alert('取得失敗: ' + err.message);
+            if (!silent) alert('取得失敗: ' + err.message);
         }
+    },
+
+    // Realtime Subscription
+    subscribe: () => {
+        if (!supabaseClient) return;
+
+        console.log('Starting Realtime Subscription...');
+        supabaseClient
+            .channel('table_db_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*', // INSERT, UPDATE, DELETE
+                    schema: 'public',
+                    table: 'projects',
+                },
+                (payload) => {
+                    console.log('Realtime change received:', payload);
+                    // 変更があったら静かに最新データを取得して更新
+                    Storage.syncFromCloud(true);
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('Realtime ready!');
+                }
+            });
     }
 };
 
@@ -226,8 +265,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // データがあればファイルに保存して永続化（localStorageからの移行を確定）
     if (App.projects.length > 0) {
-        Storage.save(App.projects);
+        Storage.save(App.projects); // ローカル保存
     }
+
+    // Start Realtime Listener
+    Storage.subscribe();
 
     // Set default filter to current month
     const now = new Date();
