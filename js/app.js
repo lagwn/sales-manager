@@ -25,7 +25,8 @@ if (window.supabase) {
 // --- Storage Manager ---
 const Storage = {
     KEY: 'sales_manager_data_v1',
-    mode: 'supabase', // 'local' or 'supabase'
+    // Electron(PC)ならローカル優先、Web(スマホ)ならクラウド優先
+    mode: window.salesManagerAPI ? 'local' : 'supabase',
 
     // Mapper: DB(snake_case) <-> App(camelCase)
     toDB: (p) => ({
