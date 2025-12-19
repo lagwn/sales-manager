@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>freee 見積書→請求書変換</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .freee-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .auth-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .auth-status.connected {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .auth-status.disconnected {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .quotation-list {
+            margin-top: 1rem;
+        }
+
+        .quotation-item {
+            display: grid;
+            grid-template-columns: 40px 1fr 150px 150px 100px;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s ease;
+            border: 1px solid #e5e7eb;
+        }
+
+        .quotation-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .quotation-item.selected {
+            border-color: #6366f1;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+        }
+
+        .quotation-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .quotation-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .quotation-title {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .quotation-client {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .quotation-date,
+        .quotation-amount {
+            font-size: 0.9rem;
+            color: #374151;
+        }
+
+        .quotation-amount {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .convert-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+        }
+
+        .date-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .date-option:hover {
+            border-color: #6366f1;
+        }
+
+        .date-option.selected {
+            border-color: #6366f1;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+        }
+
+        .date-option input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .convert-btn {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .convert-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .convert-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .result-message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .result-message.success {
+            display: block;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+
+        .result-message.error {
+            display: block;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .nav-tab {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: #374151;
+        }
+
+        .nav-tab:hover {
+            border-color: #6366f1;
+            color: #6366f1;
+        }
+
+        .nav-tab.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .settings-panel {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        .settings-panel h3 {
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .settings-label {
+            font-weight: 500;
+            color: #4b5563;
+        }
+
+        .settings-input {
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .select-all-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="freee-container">
+        <!-- Header -->
+        <header class="header" style="margin-bottom: 1.5rem;">
+            <div>
+                <h1>freee 見積書→請求書変換</h1>
+                <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">見積書を選択して請求書に変換</p>
+            </div>
+            <div class="auth-section">
+                <div id="authStatus" class="auth-status disconnected">
+                    <span>●</span>
+                    <span id="authStatusText">未接続</span>
+                </div>
+                <button id="btnAuth" class="btn btn-primary">freeeに接続</button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <div class="nav-tabs">
+            <a href="index.html" class="nav-tab">売上管理</a>
+            <a href="freee-invoice.html" class="nav-tab active">freee連携</a>
+        </div>
+
+        <!-- Settings -->
+        <div class="settings-panel" id="settingsPanel">
+            <h3>⚙️ 設定</h3>
+            <div class="settings-row">
+                <span class="settings-label">Client ID:</span>
+                <input type="text" id="clientId" class="settings-input" placeholder="freee APIのClient ID">
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">Client Secret:</span>
+                <input type="password" id="clientSecret" class="settings-input" placeholder="freee APIのClient Secret">
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">事業所ID:</span>
+                <input type="text" id="companyId" class="settings-input" placeholder="freeeの事業所ID">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button id="btnSaveSettings" class="btn" style="background: #10b981; color: white;">設定を保存</button>
+                <button id="btnToggleSettings" class="btn"
+                    style="background: #6b7280; color: white; margin-left: 0.5rem;">設定を隠す</button>
+            </div>
+        </div>
+
+        <!-- Convert Options -->
+        <div class="glass-panel convert-options">
+            <span style="font-weight: 600; color: #374151;">請求書の日付:</span>
+            <label class="date-option selected">
+                <input type="radio" name="invoiceDate" value="today" checked>
+                <span>当日の日付</span>
+            </label>
+            <label class="date-option">
+                <input type="radio" name="invoiceDate" value="lastMonth">
+                <span>前月末日</span>
+            </label>
+            <div style="flex-grow: 1;"></div>
+            <button id="btnFetchQuotations" class="btn" style="background: white; color: #333;">見積書を取得</button>
+            <button id="btnConvert" class="convert-btn" disabled>
+                <span>📄</span>
+                <span>請求書に変換してダウンロード</span>
+            </button>
+        </div>
+
+        <!-- Quotation List -->
+        <div class="glass-panel" style="padding: 1rem;">
+            <h3 style="color:#333; margin-bottom:1rem; font-size:1.1rem;">見積書一覧</h3>
+
+            <div class="select-all-row">
+                <input type="checkbox" id="selectAll" class="quotation-checkbox">
+                <label for="selectAll" style="cursor: pointer; font-weight: 500;">すべて選択</label>
+                <span id="selectedCount" style="margin-left: auto; color: #6b7280; font-size: 0.9rem;">0件選択中</span>
+            </div>
+
+            <div id="quotationList" class="quotation-list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <p>見積書を取得するには、freeeに接続してください</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Message -->
+        <div id="resultMessage" class="result-message"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingText">処理中...</p>
+        </div>
+    </div>
+
+    <script src="js/freee-invoice.js"></script>
+</body>
+
+</html>
