@@ -115,7 +115,7 @@ const Storage = {
         return projects || [];
     },
 
-    // Migration Tool (Upload)
+    // Migration Tool (Upload / Sync)
     migrateToCloud: async () => {
         // This function explicitly loads LOCAL data to push to cloud.
         let localData = [];
@@ -135,17 +135,51 @@ const Storage = {
             return alert('アップロードするデータ（ローカルデータ）が見つかりません');
         }
 
-        if (!confirm(`ローカルにある${localData.length}件のデータをクラウド(Supabase)にアップロードしますか？\n（既存のクラウドデータは上書き・統合されます）`)) return;
+        if (!confirm(`現在のPCのデータ（${localData.length}件）でクラウドを上書き更新しますか？\n\n※PC側で削除したデータは、クラウドからも削除されます。`)) return;
 
+        // 1. Add / Update (Upsert)
         const dbData = localData.map(Storage.toDB);
-        const { error } = await supabaseClient.from('projects').upsert(dbData);
+        const { error: upsertError } = await supabaseClient.from('projects').upsert(dbData);
 
-        if (error) {
-            alert('アップロード失敗: ' + error.message);
-        } else {
-            alert('アップロード成功！');
-            // location.reload(); // Reload not strictly necessary but good for sync
+        if (upsertError) {
+            return alert('アップロード失敗: ' + upsertError.message);
         }
+
+        // 2. Delete missing items (Sync Deletions)
+        try {
+            // Get all IDs present locally
+            const localIds = new Set(localData.map(p => parseInt(p.id)));
+
+            // Fetch all IDs currently in Cloud
+            const { data: cloudItems, error: fetchError } = await supabaseClient
+                .from('projects')
+                .select('id');
+
+            if (!fetchError && cloudItems) {
+                // Identify IDs in Cloud that are NOT in Local
+                const idsToDelete = cloudItems
+                    .map(i => parseInt(i.id))
+                    .filter(id => !localIds.has(id));
+
+                if (idsToDelete.length > 0) {
+                    console.log(`Deleting ${idsToDelete.length} items from cloud...`);
+                    const { error: deleteError } = await supabaseClient
+                        .from('projects')
+                        .delete()
+                        .in('id', idsToDelete);
+
+                    if (deleteError) {
+                        console.error('Delete sync logic error:', deleteError);
+                        alert('更新はできましたが、削除の反映に失敗しました。');
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Sync deletion error:', e);
+        }
+
+        alert('アップロード＆同期 成功！\nPCの状態がそのままクラウドに反映されました。');
     },
 
     // Download from Cloud
