@@ -15,7 +15,7 @@ const App = {
 
 // --- Supabase Config ---
 const SUPABASE_URL = 'https://pzkpccnfsepactoodtxp.supabase.co';
-const SUPABASE_KEY = 'sb_secret_bgh2UJN5Hb6ukgLKSQN0FA_-CdNxeFl'; // 本来は anon public key (ey...) を使用推奨。動かない場合は確認してください。
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6a3BjY25mc2VwYWN0b29kdHhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxMzMzMDYsImV4cCI6MjA4MTcwOTMwNn0.nO3Tl1ksQNIsuMOfprCs8hHYvwlg0YuhZ46zDkaDO9U';
 
 let supabase = null;
 if (window.supabase) {
