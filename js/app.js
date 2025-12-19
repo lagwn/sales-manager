@@ -53,25 +53,11 @@ const Storage = {
 
     save: async (dataOrItem) => {
         // Supabase Mode (Save single item or batch?)
-        // For efficiency, we should upsert changed items. 
-        // But the current app passes the ENTIRE array every time.
-        // We will try to upsert ALL for now (simpler migration), but warning: inefficient for large data.
-        // Recommendation: Change app logic to save only changed item.
-
-        // However, to keep it working with existing logic:
         if (Storage.mode === 'supabase' && supabase) {
             try {
-                // Determine if it's a full array or single item? 
-                // The app currently passes Full Array.
                 const list = Array.isArray(dataOrItem) ? dataOrItem : [dataOrItem];
-
-                // Convert to DB format
                 const dbData = list.map(Storage.toDB);
-
-                const { error } = await supabase
-                    .from('projects')
-                    .upsert(dbData);
-
+                const { error } = await supabase.from('projects').upsert(dbData);
                 if (error) throw error;
                 console.log('Saved to Supabase');
             } catch (err) {
@@ -100,25 +86,22 @@ const Storage = {
                     .order('date', { ascending: false });
 
                 if (error) throw error;
-                if (data) {
+                if (data && data.length > 0) {
                     projects = data.map(Storage.fromDB);
+                    return projects; // Found remote data, use it.
                 }
             } catch (err) {
                 console.error('Supabase Load Error:', err);
-                // alert('クラウド読み込みエラー: ' + err.message + '\nローカルデータを使用します。');
-                // Fallback will happen below if projects is empty
             }
         }
 
-        // 2. Fallback / Local
-        if (projects.length === 0) {
-            if (window.salesManagerAPI) {
-                const data = await window.salesManagerAPI.loadData();
-                if (Array.isArray(data) && data.length > 0) projects = data;
-            } else {
-                const str = localStorage.getItem(Storage.KEY);
-                if (str) projects = JSON.parse(str);
-            }
+        // 2. Fallback: If remote is empty or failed, load local.
+        if (window.salesManagerAPI) {
+            const data = await window.salesManagerAPI.loadData();
+            if (Array.isArray(data) && data.length > 0) projects = data;
+        } else {
+            const str = localStorage.getItem(Storage.KEY);
+            if (str) projects = JSON.parse(str);
         }
 
         return projects || [];
@@ -126,18 +109,34 @@ const Storage = {
 
     // Migration Tool
     migrateToCloud: async () => {
-        if (!confirm('現在表示されているデータをクラウド(Supabase)にアップロードして上書きしますか？')) return;
+        // This function explicitly loads LOCAL data to push to cloud.
+        let localData = [];
+        if (window.salesManagerAPI) {
+            localData = await window.salesManagerAPI.loadData();
+        } else {
+            const str = localStorage.getItem(Storage.KEY);
+            if (str) localData = JSON.parse(str);
+        }
 
-        const currentData = App.projects;
-        if (currentData.length === 0) return alert('データがありません');
+        if (!localData || localData.length === 0) {
+            // Also try in-memory if load failed
+            localData = App.projects;
+        }
 
-        const dbData = currentData.map(Storage.toDB);
+        if (!localData || localData.length === 0) {
+            return alert('アップロードするデータ（ローカルデータ）が見つかりません');
+        }
+
+        if (!confirm(`ローカルにある${localData.length}件のデータをクラウド(Supabase)にアップロードしますか？\n（既存のクラウドデータは上書き・統合されます）`)) return;
+
+        const dbData = localData.map(Storage.toDB);
         const { error } = await supabase.from('projects').upsert(dbData);
 
         if (error) {
             alert('アップロード失敗: ' + error.message);
         } else {
-            alert('アップロード成功！');
+            alert('アップロード成功！\nこれでスマホからもデータが見られるようになりました。');
+            location.reload();
         }
     }
 };
