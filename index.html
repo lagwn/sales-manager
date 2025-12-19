@@ -26,8 +26,8 @@
                 <h1>Sales Manager</h1>
                 <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">案件売上・経費管理</p>
             </div>
-            <button id="btnAddProject" class="btn btn-primary">
-                <span>+ 新規案件</span>
+            <button id="fetchQuotationsBtn" class="btn-primary">
+                <i class="fas fa-sync"></i> freeeから見積書を取得
             </button>
         </header>
 
@@ -86,11 +86,15 @@
             </div>
             <div style="flex-grow: 1;"></div>
             <div style="display: flex; gap: 0.5rem;">
+                <button id="btnAddProject" class="btn btn-primary">
+                    <span>＋ 案件追加</span>
+                </button>
                 <button id="btnBackup" class="btn" style="background: white; color: #333;" title="データをJSONファイルとして保存">
                     <span>バックアップ</span>
                 </button>
-                <input type="file" id="inpRestore" accept=".json" style="display: none;">
-                <button id="btnRestore" class="btn" style="background: white; color: #333;" title="JSONファイルからデータを復元">
+                <input type="file" id="inpRestore" style="display: none;" onchange="restoreData(event)">
+                <button id="btnRestore" class="btn" style="background: white; color: #333;" title="JSONファイルからデータを復元"
+                    onclick="document.getElementById('inpRestore').click()">
                     <span>復元</span>
                 </button>
                 <button id="btnExport" class="btn" style="background: white; color: #333;">
@@ -175,7 +179,7 @@
     <div class="modal-overlay" id="projectModal">
         <div class="modal-content">
             <h2 id="modalTitle" style="color:#333; margin-bottom: 1.5rem;">新規案件</h2>
-            <form id="projectForm" style="display: flex; flex-direction: column; gap: 1rem;">
+            <form id="projectForm" style="display: flex; flex-direction: column; gap: 1rem;" onsubmit="return false;">
                 <input type="hidden" id="editId">
 
                 <div class="input-group">
@@ -224,7 +228,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn" onclick="closeModal()"
                         style="background: #eee; color: #333;">キャンセル</button>
-                    <button type="submit" class="btn btn-primary">保存する</button>
+                    <button type="button" class="btn btn-primary" onclick="handleFormSubmit(event)">保存する</button>
                 </div>
             </form>
         </div>

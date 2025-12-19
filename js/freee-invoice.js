@@ -3,17 +3,87 @@
  */
 
 // --- State ---
+// --- State ---
 const FreeeApp = {
     accessToken: null,
     refreshToken: null,
     quotations: [],
     selectedIds: new Set(),
+    convertedIds: new Set(), // 変換済みID
     settings: {
         clientId: '',
         clientSecret: '',
         companyId: ''
     }
 };
+
+// ... (途中省略) ...
+
+function renderQuotations() {
+    const list = document.getElementById('quotationList');
+    list.innerHTML = '';
+
+    if (FreeeApp.quotations.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <p>見積書が見つかりませんでした</p>
+            </div>
+        `;
+        return;
+    }
+
+    FreeeApp.quotations.forEach(q => {
+        const item = document.createElement('div');
+        item.className = 'quotation-item';
+        if (FreeeApp.selectedIds.has(q.id)) {
+            item.classList.add('selected');
+        }
+        if (FreeeApp.convertedIds.has(q.id)) {
+            item.classList.add('converted');
+        }
+
+        const formattedDate = q.issue_date || q.quotation_date || 'N/A';
+        const amount = q.total_amount ? parseInt(q.total_amount).toLocaleString() : '0';
+
+        item.innerHTML = `
+            <input type="checkbox" class="quotation-checkbox" data-id="${q.id}" ${FreeeApp.selectedIds.has(q.id) ? 'checked' : ''}>
+            <div class="quotation-info">
+                <span class="quotation-title">${q.title || q.subject || '（件名なし）'}</span>
+                <span class="quotation-client">${q.partner_name || '（取引先不明）'}</span>
+            </div>
+            <div class="quotation-date">${formattedDate}</div>
+            <div class="quotation-amount">¥${amount}</div>
+            <div style="font-size:0.8rem; color:#6b7280; text-align:right;">${item.classList.contains('converted') ? '変換済' : '未変換'}</div>
+        `;
+
+        // Click on item selects checkbox (except when clicking checkbox itself)
+        item.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') {
+                const cb = item.querySelector('.quotation-checkbox');
+                cb.checked = !cb.checked;
+                // fire change event manually
+                cb.dispatchEvent(new Event('change'));
+            }
+        });
+
+        const checkbox = item.querySelector('.quotation-checkbox');
+        checkbox.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            if (e.target.checked) {
+                FreeeApp.selectedIds.add(id);
+                item.classList.add('selected');
+            } else {
+                FreeeApp.selectedIds.delete(id);
+                item.classList.remove('selected');
+            }
+            updateSelectedCount();
+            updateConvertButton();
+        });
+
+        list.appendChild(item);
+    });
+}
 
 // --- Constants ---
 const STORAGE_KEY = 'freee_settings_v1';
@@ -58,6 +128,11 @@ function loadTokens() {
             FreeeApp.settings.companyId = tokens.companyId;
             document.getElementById('companyId').value = tokens.companyId;
         }
+
+        // トークンがあれば接続済み表示にする
+        if (FreeeApp.accessToken) {
+            updateAuthStatus();
+        }
     }
 }
 
@@ -86,6 +161,9 @@ function setupEventListeners() {
 
     // Convert
     document.getElementById('btnConvert').addEventListener('click', convertToInvoices);
+
+    // Reset Status
+    document.getElementById('btnResetStatus').addEventListener('click', resetConvertedStatus);
 
     // Select All
     document.getElementById('selectAll').addEventListener('change', (e) => {
@@ -274,67 +352,46 @@ async function fetchQuotations() {
     }
 }
 
-function renderQuotations() {
-    const container = document.getElementById('quotationList');
 
-    if (FreeeApp.quotations.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📋</div>
-                <p>見積書がありません</p>
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = FreeeApp.quotations.map(q => `
-        <div class="quotation-item ${FreeeApp.selectedIds.has(q.id) ? 'selected' : ''}" data-id="${q.id}">
-            <input type="checkbox" class="quotation-checkbox" data-id="${q.id}" 
-                   ${FreeeApp.selectedIds.has(q.id) ? 'checked' : ''}
-                   onchange="toggleQuotation(${q.id}, this.checked)">
-            <div class="quotation-info">
-                <span class="quotation-title">${escapeHtml(q.title || q.quotation_number || '(無題)')}</span>
-                <span class="quotation-client">${escapeHtml(q.partner_name || q.company_name || '(取引先未設定)')}</span>
-            </div>
-            <span class="quotation-date">${q.issue_date || '-'}</span>
-            <span class="quotation-amount">${formatCurrency(q.total_amount || q.total_vat || 0)}</span>
-            <span style="color: #6b7280; font-size: 0.8rem;">#${q.id}</span>
-        </div>
-    `).join('');
-
-    updateSelectedCount();
-    updateConvertButton();
-}
-
-window.toggleQuotation = function (id, checked) {
-    if (checked) {
-        FreeeApp.selectedIds.add(id);
-    } else {
-        FreeeApp.selectedIds.delete(id);
-    }
-
-    // Update item styling
-    const item = document.querySelector(`.quotation-item[data-id="${id}"]`);
-    if (item) {
-        item.classList.toggle('selected', checked);
-    }
-
-    updateSelectedCount();
-    updateConvertButton();
-
-    // Update select all checkbox
-    const checkboxes = document.querySelectorAll('.quotation-checkbox:not(#selectAll)');
-    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
-    document.getElementById('selectAll').checked = allChecked;
-};
 
 function updateSelectedCount() {
     document.getElementById('selectedCount').textContent = `${FreeeApp.selectedIds.size}件選択中`;
 }
 
 function updateConvertButton() {
-    const btn = document.getElementById('btnConvert');
-    btn.disabled = FreeeApp.selectedIds.size === 0;
+    const hasSelection = FreeeApp.selectedIds.size > 0;
+
+    // 変換ボタン
+    const btnConvert = document.getElementById('btnConvert');
+    if (btnConvert) {
+        btnConvert.disabled = !hasSelection;
+    }
+
+    // ステータス解除ボタン
+    const btnReset = document.getElementById('btnResetStatus');
+    if (btnReset) {
+        btnReset.disabled = !hasSelection;
+    }
+}
+
+// --- Reset Status ---
+function resetConvertedStatus() {
+    if (FreeeApp.selectedIds.size === 0) return;
+
+    let count = 0;
+    FreeeApp.selectedIds.forEach(id => {
+        if (FreeeApp.convertedIds.has(id)) {
+            FreeeApp.convertedIds.delete(id);
+            count++;
+        }
+    });
+
+    if (count > 0) {
+        showResult(`${count}件の変換済みステータスを解除しました`, 'success');
+        renderQuotations();
+    } else {
+        showResult('選択された項目に変換済みのものはありません', 'error');
+    }
 }
 
 // --- Convert to Invoice ---
@@ -377,7 +434,7 @@ async function convertToInvoices() {
             });
 
             if (result.success) {
-                let message = `✅ ${result.convertedCount}件の請求書を作成しました。\n保存先: ${result.savePath}`;
+                let message = `✅ ${result.convertedCount}件の請求書を作成しました。`;
 
                 if (result.errors && result.errors.length > 0) {
                     message += `\n\n⚠️ エラー:\n${result.errors.join('\n')}`;
@@ -385,7 +442,14 @@ async function convertToInvoices() {
 
                 showResult(message, 'success');
 
-                // 成功した分の選択を解除
+                // 成功した見積書のIDを変換済みリストに追加し、UIを更新
+                if (result.results) {
+                    result.results.forEach(r => {
+                        FreeeApp.convertedIds.add(r.quotationId);
+                    });
+                }
+
+                // 選択を解除
                 FreeeApp.selectedIds.clear();
                 updateSelectedCount();
                 updateConvertButton();
@@ -394,10 +458,9 @@ async function convertToInvoices() {
                 document.querySelectorAll('.quotation-checkbox').forEach(cb => cb.checked = false);
                 document.querySelectorAll('.quotation-item').forEach(item => item.classList.remove('selected'));
 
-                // フォルダを開くか確認
-                if (confirm('保存先フォルダを開きますか？')) {
-                    window.freeeAPI.openFolder(result.savePath);
-                }
+                // 再描画（変換済ステータスを反映するため）
+                renderQuotations();
+
             } else {
                 showResult('変換に失敗しました:\n' + result.error, 'error');
             }

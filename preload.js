@@ -30,7 +30,17 @@ contextBridge.exposeInMainWorld('freeeAPI', {
     // フォルダを開く
     openFolder: async (folderPath) => {
         return await ipcRenderer.invoke('open-folder', folderPath);
+    },
+
+    // 外部URLを開く
+    openExternal: async (url) => {
+        return await ipcRenderer.invoke('open-external', url);
     }
+});
+
+contextBridge.exposeInMainWorld('salesManagerAPI', {
+    loadData: async () => ipcRenderer.invoke('load-data'),
+    saveData: async (data) => ipcRenderer.invoke('save-data', data)
 });
 
 // バージョン情報表示（元のコード）

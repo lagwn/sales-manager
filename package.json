@@ -2,10 +2,12 @@
   "name": "sales-blanch-desktop",
   "version": "1.0.0",
   "description": "Sales Management Desktop App",
+  "productName": "SalesBlanch",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-packager . --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds"
+    "pack": "electron-packager . --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds",
+    "deploy": "electron-packager . SalesBlanch --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds && rm -rf /Applications/SalesBlanch.app && cp -R release-builds/SalesBlanch-darwin-x64/SalesBlanch.app /Applications/"
   },
   "author": "",
   "license": "ISC",

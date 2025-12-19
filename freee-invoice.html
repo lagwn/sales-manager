@@ -72,6 +72,12 @@
             background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
         }
 
+        .quotation-item.converted {
+            background-color: #e0f2fe;
+            /* 薄い水色 */
+            border-color: #7dd3fc;
+        }
+
         .quotation-checkbox {
             width: 20px;
             height: 20px;
@@ -375,9 +381,13 @@
             </label>
             <div style="flex-grow: 1;"></div>
             <button id="btnFetchQuotations" class="btn" style="background: white; color: #333;">見積書を取得</button>
+            <button id="btnResetStatus" class="btn"
+                style="background: white; color: #6b7280; border: 1px solid #d1d5db; margin-right: 0.5rem;" disabled>
+                ステータス解除
+            </button>
             <button id="btnConvert" class="convert-btn" disabled>
                 <span>📄</span>
-                <span>請求書に変換してダウンロード</span>
+                <span>請求書に変換する</span>
             </button>
         </div>
 

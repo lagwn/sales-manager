@@ -16,25 +16,64 @@ const App = {
 // --- Storage Manager ---
 const Storage = {
     KEY: 'sales_manager_data_v1',
-    save: (data) => {
-        localStorage.setItem(Storage.KEY, JSON.stringify(data));
+    save: async (data) => {
+        if (window.salesManagerAPI) {
+            const res = await window.salesManagerAPI.saveData(data);
+            if (!res.success) {
+                alert(`保存失敗: ${res.error}`);
+            } else {
+                // alert(`保存成功: ${res.path}`); // 頻繁に出るとうるさいのでコメントアウト可だが今回はデバッグのため出す
+                console.log('Saved to', res.path);
+            }
+        } else {
+            localStorage.setItem(Storage.KEY, JSON.stringify(data));
+        }
     },
-    load: () => {
-        const str = localStorage.getItem(Storage.KEY);
-        return str ? JSON.parse(str) : [];
+    load: async () => {
+        if (window.salesManagerAPI) {
+            const data = await window.salesManagerAPI.loadData();
+
+            // エラーチェック
+            if (data && data.error) {
+                alert(`読み込みエラー: ${data.error}\n詳細: ${data.detail}\nパス: ${data.path}`);
+                return [];
+            }
+
+            if (Array.isArray(data)) {
+                return data;
+            }
+
+            // localStorageから移行（初回用）
+            if ((!data || data.length === 0)) {
+                const localStr = localStorage.getItem(Storage.KEY);
+                if (localStr) {
+                    const localData = JSON.parse(localStr);
+                    if (localData.length > 0) return localData;
+                }
+            }
+            return data || [];
+        } else {
+            const str = localStorage.getItem(Storage.KEY);
+            return str ? JSON.parse(str) : [];
+        }
     }
 };
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
-    App.projects = Storage.load();
+document.addEventListener('DOMContentLoaded', async () => {
+    App.projects = await Storage.load();
+
+    // データがあればファイルに保存して永続化（localStorageからの移行を確定）
+    if (App.projects.length > 0) {
+        Storage.save(App.projects);
+    }
 
     // Set default filter to current month
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    App.filter.startDate = formatDateInput(startOfMonth);
+    App.filter.startDate = formatDateInput(startOfYear);
     App.filter.endDate = formatDateInput(endOfMonth);
 
     document.getElementById('filterStartDate').value = App.filter.startDate;
@@ -133,7 +172,7 @@ function setupEventListeners() {
     });
 
     // Form
-    document.getElementById('projectForm').addEventListener('submit', handleFormSubmit);
+    // document.getElementById('projectForm').addEventListener('submit', handleFormSubmit); // onclickで制御するため削除
 
     // Filter
     document.getElementById('filterStartDate').addEventListener('change', (e) => {
@@ -153,42 +192,48 @@ function setupEventListeners() {
         render();
     });
 
-    // Tax Calc (Global access needed for onclick)
-    window.calcTax = (inputId) => {
-        const input = document.getElementById(inputId);
-        if (!input.value) return;
-        const val = parseInt(input.value, 10);
-        // Rounding logic: Round? Floor? User Req: "四捨五入 / 切り捨て / 切り上げ". Let's use Round for now (standard).
-        // Tax-Excl = Val / 1.1
-        const taxExcl = Math.round(val / 1.1);
-        input.value = taxExcl;
-    };
-
-    // Global functions for Table Actions
-    window.editProject = (id) => {
-        const p = App.projects.find(x => x.id === id);
-        if (p) openModal(p);
-    };
-
-    window.deleteProject = (id) => {
-        if (confirm('この案件を削除してもよろしいですか？')) {
-            App.projects = App.projects.filter(x => x.id !== id);
-            Storage.save(App.projects);
-            render();
-            updateClientSuggestions();
-        }
-    };
-
     // Export
     document.getElementById('btnExport').addEventListener('click', exportToExcel);
 
     // Backup & Restore
     document.getElementById('btnBackup').addEventListener('click', backupData);
-    document.getElementById('btnRestore').addEventListener('click', () => {
-        document.getElementById('inpRestore').click();
-    });
-    document.getElementById('inpRestore').addEventListener('change', restoreData);
+    // btnRestoreのイベントはHTML側でonclickを設定済みなので、ここでは不要、あるいは重複しても問題ないが、HTML修正済みなので削除してもよい
+    // document.getElementById('btnRestore').addEventListener('click', ...); // HTML側で対応済み
+
+    // inpRestoreのイベントもHTML側でonchangeを設定済み
 }
+
+// --- Global Actions ---
+
+// Tax Calc
+window.calcTax = (inputId) => {
+    const input = document.getElementById(inputId);
+    if (!input.value) return;
+    const val = parseInt(input.value, 10);
+    const taxExcl = Math.round(val / 1.1);
+    input.value = taxExcl;
+};
+
+// Edit Project
+window.editProject = (id) => {
+    const p = App.projects.find(x => x.id === id);
+    if (p) openModal(p);
+};
+
+// Delete Project
+window.deleteProject = async (id) => {
+    if (confirm('この案件を削除してもよろしいですか？')) {
+        try {
+            App.projects = App.projects.filter(x => x.id !== id);
+            await Storage.save(App.projects);
+            render();
+            updateClientSuggestions();
+        } catch (e) {
+            console.error('Delete failed:', e);
+            alert('削除に失敗しました: ' + e.message);
+        }
+    }
+};
 
 // --- Data Migration ---
 
@@ -223,26 +268,34 @@ function restoreData(e) {
                 return;
             }
 
-            // Merge Logic: Avoid replacing newer data if ID conflict? 
-            // Or just skip existing IDs?
-            // Simple approach: Skip if ID exists, else add.
-            let addedCount = 0;
-            importedData.forEach(newItem => {
-                if (!newItem.id) return;
-                const exists = App.projects.some(existing => existing.id === newItem.id);
-                if (!exists) {
-                    App.projects.push(newItem);
-                    addedCount++;
-                }
-            });
-
-            if (addedCount > 0) {
+            // 確認ダイアログ
+            if (confirm(`ファイルから${importedData.length}件のデータを読み込みました。\n現在のデータを全て削除して、このデータで置き換えますか？\n（[キャンセル]を押すと、重複しないデータのみ追加します）`)) {
+                // 完全に置き換え
+                App.projects = importedData;
                 Storage.save(App.projects);
                 render();
                 updateClientSuggestions();
-                alert(`${addedCount}件のデータを復元（追加）しました。`);
+                alert('データを復元（置き換え）しました。');
             } else {
-                alert('新しいデータはありませんでした（すべて重複または無効）。');
+                // データの追加（マージ）
+                let addedCount = 0;
+                importedData.forEach(newItem => {
+                    if (!newItem.id) return;
+                    const exists = App.projects.some(existing => existing.id === newItem.id);
+                    if (!exists) {
+                        App.projects.push(newItem);
+                        addedCount++;
+                    }
+                });
+
+                if (addedCount > 0) {
+                    Storage.save(App.projects);
+                    render();
+                    updateClientSuggestions();
+                    alert(`${addedCount}件のデータを追加しました。`);
+                } else {
+                    alert('新しいデータはありませんでした（すべて重複または無効）。');
+                }
             }
 
         } catch (err) {
@@ -254,6 +307,7 @@ function restoreData(e) {
     };
     reader.readAsText(file);
 }
+window.restoreData = restoreData;
 
 // --- Logic & Rendering ---
 
@@ -286,18 +340,15 @@ function getFilteredProjects() {
 
 function render() {
     const list = getFilteredProjects();
+    const totalSales = list.reduce((sum, p) => sum + (parseInt(p.sales) || 0), 0);
+    const totalExpenses = list.reduce((sum, p) => sum + (parseInt(p.expenses) || 0), 0);
+    const profit = totalSales - totalExpenses; // Calculate profit here
 
-    // 1. Stats
-    let totalSales = 0;
-    let totalExpenses = 0;
+    // Debug Filter
 
-    list.forEach(p => {
-        totalSales += (parseInt(p.sales) || 0);
-        totalExpenses += (parseInt(p.expenses) || 0);
-    });
 
-    const profit = totalSales - totalExpenses;
-
+    // 1. KPI Cards
+    const achievementRate = totalSales / 1000000 * 100; // Goal 1M
     document.getElementById('totalSales').textContent = formatCurrency(totalSales);
     document.getElementById('totalExpenses').textContent = formatCurrency(totalExpenses);
     document.getElementById('totalProfit').textContent = formatCurrency(profit);
@@ -324,9 +375,9 @@ function render() {
     tbody.innerHTML = '';
 
     if (list.length === 0) {
-        document.getElementById('emptyState').classList.remove('hidden');
+        document.getElementById('emptyState').style.display = 'block';
     } else {
-        document.getElementById('emptyState').classList.add('hidden');
+        document.getElementById('emptyState').style.display = 'none';
         // Sort by date desc
         list.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -525,57 +576,66 @@ function renderMonthlyStats(projects) {
 
 // --- CRUD ---
 
-function handleFormSubmit(e) {
-    e.preventDefault();
+// 起動時のアラートを削除
+window.handleFormSubmit = async function (e) {
+    if (e) e.preventDefault();
 
-    const id = document.getElementById('editId').value;
-    const name = document.getElementById('inpName').value;
-    const client = document.getElementById('inpClient').value;
-    const date = document.getElementById('inpDate').value;
-    const sales = parseInt(document.getElementById('inpSales').value) || 0;
-    const expenses = parseInt(document.getElementById('inpExpenses').value) || 0;
-    const note = document.getElementById('inpNote').value;
+    try {
+        const id = document.getElementById('editId').value;
+        const name = document.getElementById('inpName').value;
+        const client = document.getElementById('inpClient').value;
+        const date = document.getElementById('inpDate').value;
+        const sales = parseInt(document.getElementById('inpSales').value) || 0;
+        const expenses = parseInt(document.getElementById('inpExpenses').value) || 0;
+        const note = document.getElementById('inpNote').value;
 
-    if (id) {
-        // Edit
-        const idx = App.projects.findIndex(x => x.id == id);
-        if (idx > -1) {
-            App.projects[idx] = { ...App.projects[idx], name, client, date, sales, expenses, note };
-        }
-    } else {
-        // Create
-        const newProject = {
-            id: Date.now(), // Simple ID
-            name, client, date, sales, expenses, note
-        };
-        App.projects.push(newProject);
-
-        // Auto-create next year's entry for 'サーバー' or 'ドメイン'
-        if (name.includes('サーバー') || name.includes('ドメイン')) {
-            const d = new Date(date);
-            // Next year, same month, 1st day
-            const nextYearDate = new Date(d.getFullYear() + 1, d.getMonth(), 1);
-            const nextDateStr = formatDateInput(nextYearDate);
-
-            const nextProject = {
-                id: Date.now() + 100, // Ensure unique ID
-                name,
-                client,
-                date: nextDateStr,
-                sales,
-                expenses,
-                note
+        if (id) {
+            // Edit
+            const idx = App.projects.findIndex(x => x.id == id);
+            if (idx > -1) {
+                App.projects[idx] = { ...App.projects[idx], name, client, date, sales, expenses, note };
+            }
+        } else {
+            // Create
+            const newProject = {
+                id: Date.now(), // Simple ID
+                name, client, date, sales, expenses, note
             };
-            App.projects.push(nextProject);
-            alert(`「サーバー」または「ドメイン」が含まれているため、\n翌年(${nextDateStr})分も自動登録しました。`);
+            App.projects.push(newProject);
+
+            // Auto-create next year's entry for 'サーバー' or 'ドメイン'
+            if (name.includes('サーバー') || name.includes('ドメイン')) {
+                const d = new Date(date);
+                // Next year, same month, 1st day
+                const nextYearDate = new Date(d.getFullYear() + 1, d.getMonth(), 1);
+                const nextDateStr = formatDateInput(nextYearDate);
+
+                const nextProject = {
+                    id: Date.now() + 100, // Ensure unique ID
+                    name,
+                    client,
+                    date: nextDateStr,
+                    sales,
+                    expenses,
+                    note
+                };
+                App.projects.push(nextProject);
+            }
         }
+
+        await Storage.save(App.projects);
+        closeModal();
+        render();
+        updateClientSuggestions();
+
+    } catch (err) {
+        console.error('Save failed:', err);
+        alert('保存処理中にエラーが発生しました: ' + err.message);
     }
 
-    Storage.save(App.projects);
-    closeModal();
-    render();
-    updateClientSuggestions();
-}
+    return false;
+};
+
 
 function openModal(project = null) {
     const modal = document.getElementById('projectModal');
