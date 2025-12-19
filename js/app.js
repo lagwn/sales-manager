@@ -907,6 +907,9 @@ window.handleFormSubmit = async function (e) {
 
 // Edit Project (Renamed to bypass cache issues)
 window.handleEditProject = (argId) => {
+    // Debug
+    alert('EDIT START: ' + argId);
+
     const id = Number(argId); // Ensure Number
     const p = App.projects.find(x => x.id === id);
     if (!p) return alert('案件が見つかりません');
