@@ -906,28 +906,46 @@ window.handleFormSubmit = async function (e) {
 };
 
 // Edit Project (Renamed to bypass cache issues)
+// Edit Project (Renamed to bypass cache issues)
 window.handleEditProject = (argId) => {
-    // Debug
-    alert('EDIT START: ' + argId);
+    try {
+        const id = Number(argId);
+        const p = App.projects.find(x => x.id === id);
 
-    const id = Number(argId); // Ensure Number
-    const p = App.projects.find(x => x.id === id);
-    if (!p) return alert('案件が見つかりません');
+        if (!p) {
+            alert('案件が見つかりません (ID: ' + id + ')');
+            return;
+        }
 
-    document.getElementById('editId').value = p.id;
-    document.getElementById('inpName').value = p.name;
-    document.getElementById('inpClient').value = p.client || '';
-    document.getElementById('inpDate').value = p.date;
-    document.getElementById('inpSales').value = p.sales;
-    document.getElementById('inpExpenses').value = p.expenses;
-    document.getElementById('inpNote').value = p.note || '';
+        // Set values
+        document.getElementById('editId').value = p.id;
+        document.getElementById('inpName').value = p.name;
+        document.getElementById('inpClient').value = p.client || '';
+        document.getElementById('inpDate').value = p.date;
+        document.getElementById('inpSales').value = p.sales;
+        document.getElementById('inpExpenses').value = p.expenses;
+        document.getElementById('inpNote').value = p.note || '';
 
-    // Calculate profit
-    document.getElementById('calcProfit').textContent = formatCurrency((p.sales || 0) - (p.expenses || 0));
+        // Calculate profit
+        const sales = parseInt(p.sales) || 0;
+        const expenses = parseInt(p.expenses) || 0;
+        document.getElementById('calcProfit').textContent = formatCurrency(sales - expenses);
 
-    // Show modal
-    document.getElementById('modalTitle').textContent = '案件編集';
-    document.getElementById('editModal').style.display = 'flex';
+        // Show modal (Wrapped in setTimeout to ensure rendering on mobile)
+        setTimeout(() => {
+            document.getElementById('modalTitle').textContent = '案件編集';
+            const modal = document.getElementById('editModal');
+            if (modal) {
+                modal.style.display = 'flex';
+            } else {
+                alert('エラー: 編集画面のHTMLが見つかりません');
+            }
+        }, 10);
+
+    } catch (err) {
+        alert('編集画面エラー: ' + err.message);
+        console.error(err);
+    }
 };
 
 function openModal(project = null) {
