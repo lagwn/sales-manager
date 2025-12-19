@@ -57,28 +57,35 @@ const Storage = {
     }),
 
     save: async (dataOrItem) => {
-        // Supabase Mode
-        // "mode"がlocalでも、バックアップとしてクラウドに送ることも可能だが、
-        // ここでは純粋にモードに従うか、あるいはユーザー体験のために両方やるか。
-        // いったんモードに従う。
-        if (Storage.mode === 'supabase' && supabaseClient) {
-            try {
-                const list = Array.isArray(dataOrItem) ? dataOrItem : [dataOrItem];
-                const dbData = list.map(Storage.toDB);
-                const { error } = await supabaseClient.from('projects').upsert(dbData);
-                if (error) throw error;
-                console.log('Saved to Supabase');
-            } catch (err) {
-                console.error('Supabase Save Error:', err);
-                // alert('クラウド保存エラー: ' + err.message);
-            }
-        }
-
-        // Local/Electron Logic
+        // 1. ローカル保存（これを最優先してUI動作を軽くする）
         if (window.salesManagerAPI) {
             window.salesManagerAPI.saveData(dataOrItem);
         } else {
             localStorage.setItem(Storage.KEY, JSON.stringify(dataOrItem));
+        }
+
+        // 2. クラウド自動同期（裏側で実行）
+        if (supabaseClient) {
+            // 非同期で実行（UIをブロックしない）
+            (async () => {
+                try {
+                    const list = Array.isArray(dataOrItem) ? dataOrItem : [dataOrItem];
+                    const dbData = list.map(Storage.toDB);
+
+                    // Upsert (Insert or Update)
+                    const { error } = await supabaseClient.from('projects').upsert(dbData);
+                    if (error) throw error;
+
+                    // Delete Check (完全同期のため、ローカルにないIDはクラウドからも消す)
+                    // 毎回全件チェックは重いので、本来は削除時のみdeleteを呼ぶべきだが、
+                    // 実装をシンプルにするため、save時は upsert のみとし、
+                    // 明示的な削除（deleteProject）の時にクラウド削除を呼ぶようにする。
+                    // ここではとりあえず Upsert のみ行う。
+                    console.log('Auto-synced to Supabase');
+                } catch (err) {
+                    console.error('Auto-sync Error:', err);
+                }
+            })();
         }
     },
 
@@ -424,17 +431,25 @@ window.editProject = (id) => {
 };
 
 // Delete Project
-window.deleteProject = async (id) => {
-    if (confirm('この案件を削除してもよろしいですか？')) {
-        try {
-            App.projects = App.projects.filter(x => x.id !== id);
-            await Storage.save(App.projects);
-            render();
-            updateClientSuggestions();
-        } catch (e) {
-            console.error('Delete failed:', e);
-            alert('削除に失敗しました: ' + e.message);
-        }
+window.deleteProject = (id) => {
+    if (!confirm('本当に削除しますか？')) return;
+
+    App.projects = App.projects.filter(p => p.id !== id);
+    // ローカル保存
+    Storage.save(App.projects);
+    render();
+    updateClientSuggestions();
+
+    // クラウド削除（非同期）
+    if (supabaseClient) {
+        supabaseClient
+            .from('projects')
+            .delete()
+            .eq('id', id)
+            .then(({ error }) => {
+                if (error) console.error('Cloud delete error:', error);
+                else console.log('Deleted from cloud:', id);
+            });
     }
 };
 
