@@ -17,16 +17,20 @@ const App = {
 const SUPABASE_URL = 'https://pzkpccnfsepactoodtxp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6a3BjY25mc2VwYWN0b29kdHhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxMzMzMDYsImV4cCI6MjA4MTcwOTMwNn0.nO3Tl1ksQNIsuMOfprCs8hHYvwlg0YuhZ46zDkaDO9U';
 
-let supabase = null;
+// Use a distinct variable name to avoid "Identifier already declared" errors
+let supabaseClient = null;
 if (window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 // --- Storage Manager ---
 const Storage = {
     KEY: 'sales_manager_data_v1',
-    // Electron(PC)ならローカル優先、Web(スマホ)ならクラウド優先
-    mode: window.salesManagerAPI ? 'local' : 'supabase',
+    // 実行時に判定することで、preload等の読み込み完了を待つ
+    get mode() {
+        // window.salesManagerAPIが存在すればPCアプリ（ローカルモード推奨）
+        return window.salesManagerAPI ? 'local' : 'supabase';
+    },
 
     // Mapper: DB(snake_case) <-> App(camelCase)
     toDB: (p) => ({
@@ -53,21 +57,24 @@ const Storage = {
     }),
 
     save: async (dataOrItem) => {
-        // Supabase Mode (Save single item or batch?)
-        if (Storage.mode === 'supabase' && supabase) {
+        // Supabase Mode
+        // "mode"がlocalでも、バックアップとしてクラウドに送ることも可能だが、
+        // ここでは純粋にモードに従うか、あるいはユーザー体験のために両方やるか。
+        // いったんモードに従う。
+        if (Storage.mode === 'supabase' && supabaseClient) {
             try {
                 const list = Array.isArray(dataOrItem) ? dataOrItem : [dataOrItem];
                 const dbData = list.map(Storage.toDB);
-                const { error } = await supabase.from('projects').upsert(dbData);
+                const { error } = await supabaseClient.from('projects').upsert(dbData);
                 if (error) throw error;
                 console.log('Saved to Supabase');
             } catch (err) {
                 console.error('Supabase Save Error:', err);
-                alert('クラウド保存エラー: ' + err.message);
+                // alert('クラウド保存エラー: ' + err.message);
             }
         }
 
-        // Also save to Local/Electron as backup/offline
+        // Local/Electron Logic
         if (window.salesManagerAPI) {
             window.salesManagerAPI.saveData(dataOrItem);
         } else {
@@ -78,10 +85,10 @@ const Storage = {
     load: async () => {
         let projects = [];
 
-        // 1. Try Supabase
-        if (Storage.mode === 'supabase' && supabase) {
+        // 1. Try Supabase if mode is supabase
+        if (Storage.mode === 'supabase' && supabaseClient) {
             try {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('projects')
                     .select('*')
                     .order('date', { ascending: false });
@@ -89,14 +96,14 @@ const Storage = {
                 if (error) throw error;
                 if (data && data.length > 0) {
                     projects = data.map(Storage.fromDB);
-                    return projects; // Found remote data, use it.
+                    return projects;
                 }
             } catch (err) {
                 console.error('Supabase Load Error:', err);
             }
         }
 
-        // 2. Fallback: If remote is empty or failed, load local.
+        // 2. Fallback / Local
         if (window.salesManagerAPI) {
             const data = await window.salesManagerAPI.loadData();
             if (Array.isArray(data) && data.length > 0) projects = data;
@@ -131,7 +138,7 @@ const Storage = {
         if (!confirm(`ローカルにある${localData.length}件のデータをクラウド(Supabase)にアップロードしますか？\n（既存のクラウドデータは上書き・統合されます）`)) return;
 
         const dbData = localData.map(Storage.toDB);
-        const { error } = await supabase.from('projects').upsert(dbData);
+        const { error } = await supabaseClient.from('projects').upsert(dbData);
 
         if (error) {
             alert('アップロード失敗: ' + error.message);
@@ -346,19 +353,21 @@ function restoreData(e) {
     reader.onload = (event) => {
         try {
             const importedData = JSON.parse(event.target.result);
+            // Debug alert
             if (!Array.isArray(importedData)) {
-                alert('データ形式が正しくありません（配列形式である必要があります）');
+                alert('エラー: JSONデータが配列形式ではありません。\n中身を確認してください: ' + JSON.stringify(importedData).substring(0, 100));
+                return;
+            }
+            if (importedData.length === 0) {
+                alert('エラー: JSONデータが空です（0件）。');
                 return;
             }
 
             // 確認ダイアログ
-            if (confirm(`ファイルから${importedData.length}件のデータを読み込みました。\n現在のデータを全て削除して、このデータで置き換えますか？\n（[キャンセル]を押すと、重複しないデータのみ追加します）`)) {
+            if (confirm(`ファイルから${importedData.length}件のデータを読み込みました。（先頭: ${importedData[0].date} ${importedData[0].name}）\n現在のデータを全て削除して、このデータで置き換えますか？\n（[キャンセル]を押すと、重複しないデータのみ追加します）`)) {
                 // 完全に置き換え
                 App.projects = importedData;
-                Storage.save(App.projects);
-                render();
-                updateClientSuggestions();
-                alert('データを復元（置き換え）しました。');
+                finishRestore('データを復元（置き換え）しました。');
             } else {
                 // データの追加（マージ）
                 let addedCount = 0;
@@ -372,10 +381,7 @@ function restoreData(e) {
                 });
 
                 if (addedCount > 0) {
-                    Storage.save(App.projects);
-                    render();
-                    updateClientSuggestions();
-                    alert(`${addedCount}件のデータを追加しました。`);
+                    finishRestore(`${addedCount}件のデータを追加しました。`);
                 } else {
                     alert('新しいデータはありませんでした（すべて重複または無効）。');
                 }
@@ -383,12 +389,46 @@ function restoreData(e) {
 
         } catch (err) {
             console.error(err);
-            alert('ファイルの読み込みに失敗しました。JSONファイルか確認してください。');
+            alert('ファイルの読み込みに失敗しました。\nエラー詳細: ' + err.message + '\n\nJSONファイルが壊れているか、形式が間違っている可能性があります。');
         } finally {
             e.target.value = ''; // Reset input
         }
     };
     reader.readAsText(file);
+}
+
+// Helper to finalize restore
+function finishRestore(message) {
+    Storage.save(App.projects);
+
+    // 1. 日付フィルタをデータに合わせて自動調整
+    if (App.projects.length > 0) {
+        const dates = App.projects.map(p => new Date(p.date).getTime());
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+
+        // Form controls update
+        App.filter.startDate = formatDateInput(minDate);
+        // End date should be at least today
+        const now = new Date();
+        if (maxDate < now) {
+            App.filter.endDate = formatDateInput(now);
+        } else {
+            App.filter.endDate = formatDateInput(maxDate);
+        }
+
+        document.getElementById('filterStartDate').value = App.filter.startDate;
+        document.getElementById('filterEndDate').value = App.filter.endDate;
+    }
+
+    render();
+    updateClientSuggestions();
+    alert(message);
+
+    // 2. クラウド同期の案内
+    if (Storage.mode === 'local' && confirm('復元したデータをクラウドにも保存（同期）しますか？\n（スマホでも見られるようになります）')) {
+        Storage.migrateToCloud();
+    }
 }
 window.restoreData = restoreData;
 

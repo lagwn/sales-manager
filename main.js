@@ -30,7 +30,7 @@ function createWindow() {
     mainWindow.loadFile('index.html');
 
     // Open DevTools for debugging (comment out in production)
-    // mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
