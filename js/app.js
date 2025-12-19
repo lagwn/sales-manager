@@ -992,6 +992,9 @@ function openModal(project = null) {
         document.getElementById('inpDate').value = formatDateInput(new Date());
     }
 
+    // Force visibility styles (fixes issue where it won't reopen after close)
+    modal.style.display = 'flex';
+    modal.style.zIndex = '99999';
     modal.classList.add('open');
 }
 

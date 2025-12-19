@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sales-manager-v10';
+const CACHE_NAME = 'sales-manager-v11';
 const urlsToCache = [
     './',
     './index.html',
