@@ -432,6 +432,9 @@ window.editProject = (id) => {
 
 // Delete Project
 window.deleteProject = (argId) => {
+    // Debug Alert (for troubleshooting mobile taps)
+    // alert('DELETE CALLED: ' + argId);
+
     // 1. 型変換とID確認
     const id = Number(argId);
     if (!confirm(`本当に削除しますか？\n(ID: ${id})`)) return;
