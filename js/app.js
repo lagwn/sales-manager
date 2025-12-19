@@ -431,8 +431,13 @@ window.editProject = (id) => {
 };
 
 // Delete Project
-window.deleteProject = async (id) => {
-    if (!confirm('本当に削除しますか？')) return;
+window.deleteProject = async (argId) => {
+    const id = Number(argId); // 確実に数値型に変換（これが原因でした！）
+
+    // Debug: IDが正しいか確認
+    // console.log('Attempting to delete ID:', id, typeof id);
+
+    if (!confirm(`本当に削除しますか？\n(ID: ${id})`)) return;
 
     // クラウド削除（最優先）
     if (supabaseClient) {
@@ -447,17 +452,15 @@ window.deleteProject = async (id) => {
         } catch (err) {
             console.error('Cloud delete error:', err);
             alert('クラウドからの削除に失敗しました: ' + err.message);
-            return; // 削除失敗時はローカルも消さない（整合性のため）
+            return; // 削除失敗時はローカルも消さない
         }
     }
 
     // ローカル削除
+    // 型変換したので、数値同士で正しく比較・除外される
     App.projects = App.projects.filter(p => p.id !== id);
 
-    // ローカル保存（UI更新含む）
-    // Storage.saveは自動同期(Upsert)も行うが、既に削除済みなので影響なし
-    // ただし自動同期の無駄な通信を避けるため、window.salesManagerAPIがあるか等で分岐してもいいが、
-    // 今はシンプルに呼ぶ（実害はない）。
+    // ローカル保存
     Storage.save(App.projects);
 
     render();
@@ -898,6 +901,27 @@ window.handleFormSubmit = async function (e) {
     return false;
 };
 
+// Edit Project
+window.editProject = (argId) => {
+    const id = Number(argId); // Ensure Number
+    const p = App.projects.find(x => x.id === id);
+    if (!p) return alert('案件が見つかりません');
+
+    document.getElementById('editId').value = p.id;
+    document.getElementById('inpName').value = p.name;
+    document.getElementById('inpClient').value = p.client || '';
+    document.getElementById('inpDate').value = p.date;
+    document.getElementById('inpSales').value = p.sales;
+    document.getElementById('inpExpenses').value = p.expenses;
+    document.getElementById('inpNote').value = p.note || '';
+
+    // Calculate profit
+    document.getElementById('calcProfit').textContent = formatCurrency((p.sales || 0) - (p.expenses || 0));
+
+    // Show modal
+    document.getElementById('modalTitle').textContent = '案件編集';
+    document.getElementById('editModal').style.display = 'flex';
+};
 
 function openModal(project = null) {
     const modal = document.getElementById('projectModal');
