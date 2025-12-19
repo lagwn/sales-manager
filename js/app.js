@@ -431,40 +431,38 @@ window.editProject = (id) => {
 };
 
 // Delete Project
-window.deleteProject = async (argId) => {
-    const id = Number(argId); // 確実に数値型に変換（これが原因でした！）
-
-    // Debug: IDが正しいか確認
-    // console.log('Attempting to delete ID:', id, typeof id);
-
+window.deleteProject = (argId) => {
+    // 1. 型変換とID確認
+    const id = Number(argId);
     if (!confirm(`本当に削除しますか？\n(ID: ${id})`)) return;
 
-    // クラウド削除（最優先）
-    if (supabaseClient) {
-        try {
-            const { error } = await supabaseClient
-                .from('projects')
-                .delete()
-                .eq('id', id);
-
-            if (error) throw error;
-            console.log('Deleted from cloud:', id);
-        } catch (err) {
-            console.error('Cloud delete error:', err);
-            alert('クラウドからの削除に失敗しました: ' + err.message);
-            return; // 削除失敗時はローカルも消さない
-        }
-    }
-
-    // ローカル削除
-    // 型変換したので、数値同士で正しく比較・除外される
+    // 2. まずローカルから削除して画面を更新（サクサク動かすため）
+    const originalProjects = [...App.projects]; // 失敗時の復元用
     App.projects = App.projects.filter(p => p.id !== id);
 
-    // ローカル保存
-    Storage.save(App.projects);
-
+    // UI更新
     render();
     updateClientSuggestions();
+
+    // ローカル保存（自動Upsert同期が走るが、削除したIDは送られないので無害）
+    Storage.save(App.projects);
+
+    // 3. クラウドから削除（バックグラウンド実行）
+    if (supabaseClient) {
+        supabaseClient
+            .from('projects')
+            .delete()
+            .eq('id', id)
+            .then(({ error }) => {
+                if (error) {
+                    console.error('Cloud delete error:', error);
+                    alert('クラウドからの削除に失敗しました。画面をリロードすると元に戻る可能性があります。');
+                    // 必要ならロールバックするが、今回はアラートのみ
+                } else {
+                    console.log('Deleted from cloud:', id);
+                }
+            });
+    }
 };
 
 // --- Data Migration ---
