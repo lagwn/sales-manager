@@ -666,7 +666,7 @@ function render() {
             tr.onclick = (e) => {
                 // Ignore if clicked on button or checkbox (handled by bubbling check or explicitly stopping prop in children)
                 // But simplified: Children will stop propagation.
-                editProject(p.id);
+                handleEditProject(p.id);
             };
 
             tr.innerHTML = `
