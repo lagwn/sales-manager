@@ -949,7 +949,17 @@ window.handleEditProject = (argId) => {
             if (!modal) modal = document.getElementById('editModal');
 
             if (modal) {
+                // Force visibility styles for mobile
                 modal.style.display = 'flex';
+                modal.style.zIndex = '99999';
+                modal.style.visibility = 'visible';
+                modal.style.opacity = '1';
+                // Adjust position just in case
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
             } else {
                 alert('エラー: 編集画面が見つかりません');
             }
