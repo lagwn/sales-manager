@@ -996,7 +996,14 @@ function openModal(project = null) {
 }
 
 function closeModal() {
-    document.getElementById('projectModal').classList.remove('open');
+    const modal = document.getElementById('projectModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('open');
+    }
+    // Also try editModal just in case
+    const fallback = document.getElementById('editModal');
+    if (fallback) fallback.style.display = 'none';
 }
 
 // --- Export ---
