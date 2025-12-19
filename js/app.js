@@ -685,7 +685,7 @@ function render() {
                 <td class="text-right" style="font-weight:bold; color: ${profit >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatCurrency(profit)}</td>
                 <td class="text-right" onclick="event.stopPropagation()">
                     <div style="display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-end;">
-                        <button class="btn btn-sm" onclick="editProject('${p.id}')" style="background:#fff; border:1px solid #ddd; width: 50px; justify-content: center; padding: 0.2rem;">編集</button>
+                        <button class="btn btn-sm" onclick="handleEditProject('${p.id}')" style="background:#fff; border:1px solid #ddd; width: 50px; justify-content: center; padding: 0.2rem;">編集</button>
                         <button class="btn btn-sm btn-danger" onclick="handleDeleteProject('${p.id}')" style="width: 50px; justify-content: center; padding: 0.2rem;">削除</button>
                     </div>
                 </td>
@@ -905,8 +905,8 @@ window.handleFormSubmit = async function (e) {
     return false;
 };
 
-// Edit Project
-window.editProject = (argId) => {
+// Edit Project (Renamed to bypass cache issues)
+window.handleEditProject = (argId) => {
     const id = Number(argId); // Ensure Number
     const p = App.projects.find(x => x.id === id);
     if (!p) return alert('案件が見つかりません');
