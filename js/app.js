@@ -431,26 +431,37 @@ window.editProject = (id) => {
 };
 
 // Delete Project
-window.deleteProject = (id) => {
+window.deleteProject = async (id) => {
     if (!confirm('本当に削除しますか？')) return;
 
+    // クラウド削除（最優先）
+    if (supabaseClient) {
+        try {
+            const { error } = await supabaseClient
+                .from('projects')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            console.log('Deleted from cloud:', id);
+        } catch (err) {
+            console.error('Cloud delete error:', err);
+            alert('クラウドからの削除に失敗しました: ' + err.message);
+            return; // 削除失敗時はローカルも消さない（整合性のため）
+        }
+    }
+
+    // ローカル削除
     App.projects = App.projects.filter(p => p.id !== id);
-    // ローカル保存
+
+    // ローカル保存（UI更新含む）
+    // Storage.saveは自動同期(Upsert)も行うが、既に削除済みなので影響なし
+    // ただし自動同期の無駄な通信を避けるため、window.salesManagerAPIがあるか等で分岐してもいいが、
+    // 今はシンプルに呼ぶ（実害はない）。
     Storage.save(App.projects);
+
     render();
     updateClientSuggestions();
-
-    // クラウド削除（非同期）
-    if (supabaseClient) {
-        supabaseClient
-            .from('projects')
-            .delete()
-            .eq('id', id)
-            .then(({ error }) => {
-                if (error) console.error('Cloud delete error:', error);
-                else console.log('Deleted from cloud:', id);
-            });
-    }
 };
 
 // --- Data Migration ---
