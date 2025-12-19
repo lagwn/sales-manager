@@ -292,6 +292,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Event Listeners
     setupEventListeners();
 
+    // Auto-sync on window focus (PC/Mobile)
+    window.addEventListener('focus', () => {
+        // console.log('Window focused, checking for updates...');
+        Storage.syncFromCloud(true); // silent sync
+    });
+
     // Initial Render
     render();
     updateClientSuggestions();
@@ -432,9 +438,6 @@ window.editProject = (id) => {
 
 // Delete Project
 window.deleteProject = (argId) => {
-    // Debug Alert (for troubleshooting mobile taps)
-    // alert('DELETE CALLED: ' + argId);
-
     // 1. 型変換とID確認
     const id = Number(argId);
     if (!confirm(`本当に削除しますか？\n(ID: ${id})`)) return;
