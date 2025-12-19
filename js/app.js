@@ -907,6 +907,7 @@ window.handleFormSubmit = async function (e) {
 
 // Edit Project (Renamed to bypass cache issues)
 // Edit Project (Renamed to bypass cache issues)
+// Edit Project (Renamed to bypass cache issues)
 window.handleEditProject = (argId) => {
     try {
         const id = Number(argId);
@@ -917,28 +918,40 @@ window.handleEditProject = (argId) => {
             return;
         }
 
-        // Set values
-        document.getElementById('editId').value = p.id;
-        document.getElementById('inpName').value = p.name;
-        document.getElementById('inpClient').value = p.client || '';
-        document.getElementById('inpDate').value = p.date;
-        document.getElementById('inpSales').value = p.sales;
-        document.getElementById('inpExpenses').value = p.expenses;
-        document.getElementById('inpNote').value = p.note || '';
+        // Helper to safely set value
+        const setValue = (elementId, value) => {
+            const el = document.getElementById(elementId);
+            if (el) el.value = value;
+        };
 
-        // Calculate profit
+        // Set values safely
+        setValue('editId', p.id);
+        setValue('inpName', p.name);
+        setValue('inpClient', p.client || '');
+        setValue('inpDate', p.date);
+        setValue('inpSales', p.sales);
+        setValue('inpExpenses', p.expenses);
+        setValue('inpNote', p.note || '');
+
+        // Calculate profit safely
         const sales = parseInt(p.sales) || 0;
         const expenses = parseInt(p.expenses) || 0;
-        document.getElementById('calcProfit').textContent = formatCurrency(sales - expenses);
+        const profitEl = document.getElementById('calcProfit');
+        if (profitEl) profitEl.textContent = formatCurrency(sales - expenses);
 
-        // Show modal (Wrapped in setTimeout to ensure rendering on mobile)
+        // Show modal (Correct ID is 'projectModal')
         setTimeout(() => {
-            document.getElementById('modalTitle').textContent = '案件編集';
-            const modal = document.getElementById('editModal');
+            const title = document.getElementById('modalTitle');
+            if (title) title.textContent = '案件編集';
+
+            // Check both IDs just in case
+            let modal = document.getElementById('projectModal');
+            if (!modal) modal = document.getElementById('editModal');
+
             if (modal) {
                 modal.style.display = 'flex';
             } else {
-                alert('エラー: 編集画面のHTMLが見つかりません');
+                alert('エラー: 編集画面が見つかりません');
             }
         }, 10);
 
