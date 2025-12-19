@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Manager</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- SheetJS (Excel Export) -->
+    <script src="js/xlsx.full.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div>
+                <h1>Sales Manager</h1>
+                <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">案件売上・経費管理</p>
+            </div>
+            <button id="btnAddProject" class="btn btn-primary">
+                <span>+ 新規案件</span>
+            </button>
+        </header>
+
+        <!-- Stats Cards -->
+
+        <div class="stats-grid">
+            <div class="glass-panel stat-card">
+                <span class="stat-label">売上合計</span>
+                <span class="stat-value" id="totalSales">¥0</span>
+            </div>
+            <div class="glass-panel stat-card">
+                <span class="stat-label">経費合計</span>
+                <span class="stat-value" id="totalExpenses">¥0</span>
+            </div>
+            <div class="glass-panel stat-card">
+                <span class="stat-label">粗利益</span>
+                <span class="stat-value profit" id="totalProfit">¥0</span>
+            </div>
+            <div class="glass-panel stat-card">
+                <span class="stat-label">目標達成率 (月80万)</span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="stat-value" id="achievementRate">0%</span>
+                    <span id="achievementIcon" style="font-size: 2rem;">🌱</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="glass-panel controls-bar">
+            <div class="input-group">
+                <label>期間 (開始)</label>
+                <input type="date" id="filterStartDate" class="form-control">
+            </div>
+            <div class="input-group">
+                <label>期間 (終了)</label>
+                <input type="date" id="filterEndDate" class="form-control">
+            </div>
+            <div class="input-group" style="flex-grow: 1; max-width: 300px;">
+                <label>検索 (案件名・クライアント)</label>
+                <input type="text" id="filterKeyword" class="form-control" placeholder="キーワードを入力...">
+            </div>
+            <div class="input-group" style="justify-content: flex-end; padding-bottom: 5px;">
+                <label
+                    style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: bold; color: #555;">
+                    <input type="checkbox" id="filterUninvoiced" style="transform: scale(1.2);">
+                    未請求のみ表示
+                </label>
+            </div>
+            <div style="flex-grow: 1;"></div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button id="btnBackup" class="btn" style="background: white; color: #333;" title="データをJSONファイルとして保存">
+                    <span>バックアップ</span>
+                </button>
+                <input type="file" id="inpRestore" accept=".json" style="display: none;">
+                <button id="btnRestore" class="btn" style="background: white; color: #333;" title="JSONファイルからデータを復元">
+                    <span>復元</span>
+                </button>
+                <button id="btnExport" class="btn" style="background: white; color: #333;">
+                    <span>Excel出力</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Project List -->
+        <div class="glass-panel table-container">
+            <h3 style="color:#333; margin-bottom:1rem; font-size:1.1rem;">案件一覧</h3>
+            <table id="projectTable">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">請求</th>
+                        <th style="width: 50px; text-align: center;">入金</th>
+                        <th>日付</th>
+                        <th>案件名</th>
+                        <th>クライアント</th>
+                        <th class="text-right">売上</th>
+                        <th class="text-right">経費</th>
+                        <th>外注先・備考</th>
+                        <th class="text-right">利益</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="projectListBody">
+                    <!-- JS will populate this -->
+                </tbody>
+            </table>
+            <div id="emptyState" style="text-align: center; padding: 2rem; color: #999;">
+                表示するデータがありません
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+            <!-- Monthly Summary Table -->
+            <div class="glass-panel table-container">
+                <h3 style="color:#333; margin-bottom:1rem; font-size:1.1rem;">月別集計</h3>
+                <table id="monthlyTable">
+                    <thead>
+                        <tr>
+                            <th>月</th>
+                            <th class="text-right">売上</th>
+                            <th class="text-right">経費</th>
+                            <th class="text-right">利益</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthlyListBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Chart -->
+            <div class="glass-panel" style="padding:1rem;">
+                <h3 style="color:#333; margin-bottom:1rem; font-size:1.1rem;">推移グラフ</h3>
+                <div style="height: 300px;">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Summary -->
+        <div class="glass-panel table-container" style="margin-top: 2rem;">
+            <h3 style="color:#333; margin-bottom:1rem; font-size:1.1rem;">クライアント別集計</h3>
+            <table id="clientTable">
+                <thead>
+                    <tr>
+                        <th>クライアント名</th>
+                        <th class="text-right">案件数</th>
+                        <th class="text-right">売上</th>
+                        <th class="text-right">経費</th>
+                        <th class="text-right">利益</th>
+                    </tr>
+                </thead>
+                <tbody id="clientListBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="projectModal">
+        <div class="modal-content">
+            <h2 id="modalTitle" style="color:#333; margin-bottom: 1.5rem;">新規案件</h2>
+            <form id="projectForm" style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="hidden" id="editId">
+
+                <div class="input-group">
+                    <label style="color:#666;">案件日</label>
+                    <input type="date" id="inpDate" class="form-control" required>
+                </div>
+
+                <div class="input-group">
+                    <label style="color:#666;">案件名</label>
+                    <input type="text" id="inpName" class="form-control" placeholder="例：Webサイト制作" required>
+                </div>
+
+                <div class="input-group">
+                    <label style="color:#666;">クライアント名</label>
+                    <input type="text" id="inpClient" class="form-control" placeholder="例：株式会社〇〇" required
+                        list="clientSuggestions" autocomplete="off">
+                    <datalist id="clientSuggestions"></datalist>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="input-group">
+                        <label style="color:#666;">売上 (税込)</label>
+                        <div style="display: flex; gap: 0.5rem; width: 100%;">
+                            <input type="number" id="inpSales" class="form-control" min="0" required
+                                style="flex: 1; min-width: 0;">
+                            <button type="button" class="btn btn-sm" onclick="calcTax('inpSales')"
+                                style="white-space: nowrap; flex-shrink: 0;">税抜</button>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label style="color:#666;">経費 (税込)</label>
+                        <div style="display: flex; gap: 0.5rem; width: 100%;">
+                            <input type="number" id="inpExpenses" class="form-control" min="0" value="0"
+                                style="flex: 1; min-width: 0;">
+                            <button type="button" class="btn btn-sm" onclick="calcTax('inpExpenses')"
+                                style="white-space: nowrap; flex-shrink: 0;">税抜</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label style="color:#666;">外注先</label>
+                    <input type="text" id="inpNote" class="form-control" placeholder="外注先など">
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="closeModal()"
+                        style="background: #eee; color: #333;">キャンセル</button>
+                    <button type="submit" class="btn btn-primary">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>

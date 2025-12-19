@@ -1,0 +1,32 @@
+{
+  "name": "sales-blanch-desktop",
+  "version": "1.0.0",
+  "description": "Sales Management Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds"
+  },
+  "author": "",
+  "license": "ISC",
+  "build": {
+    "appId": "com.sales-blanch.desktop",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "files": [
+      "**/*",
+      "!dist",
+      "!node_modules"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^11.5.0",
+    "electron-builder": "^22.10.5",
+    "electron-packager": "^15.2.0"
+  }
+}
