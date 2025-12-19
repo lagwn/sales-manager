@@ -436,8 +436,8 @@ window.editProject = (id) => {
     if (p) openModal(p);
 };
 
-// Delete Project
-window.deleteProject = (argId) => {
+// Delete Project (Renamed to bypass cache issues)
+window.handleDeleteProject = (argId) => {
     // 1. 型変換とID確認
     const id = Number(argId);
     if (!confirm(`本当に削除しますか？\n(ID: ${id})`)) return;
@@ -686,7 +686,7 @@ function render() {
                 <td class="text-right" onclick="event.stopPropagation()">
                     <div style="display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-end;">
                         <button class="btn btn-sm" onclick="editProject('${p.id}')" style="background:#fff; border:1px solid #ddd; width: 50px; justify-content: center; padding: 0.2rem;">編集</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteProject('${p.id}')" style="width: 50px; justify-content: center; padding: 0.2rem;">削除</button>
+                        <button class="btn btn-sm btn-danger" onclick="handleDeleteProject('${p.id}')" style="width: 50px; justify-content: center; padding: 0.2rem;">削除</button>
                     </div>
                 </td>
             `;
