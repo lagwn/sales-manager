@@ -30,9 +30,15 @@
                 <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">案件売上・経費管理</p>
             </div>
             <div style="display: flex; gap: 0.5rem;">
+                <button id="btnCloudLoadHeader" class="btn" onclick="Storage.syncFromCloud()"
+                    style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"
+                    title="クラウドから最新データを取得">
+                    ☁️ 取得 (DL)
+                </button>
                 <button id="btnCloudSyncHeader" class="btn" onclick="Storage.migrateToCloud()"
-                    style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">
-                    ☁️ 保存 (同期)
+                    style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"
+                    title="データをクラウドに保存">
+                    ☁️ 保存 (Up)
                 </button>
                 <button id="fetchQuotationsBtn" class="btn-primary">
                     <i class="fas fa-sync"></i> freeeから見積書を取得

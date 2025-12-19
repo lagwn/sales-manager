@@ -115,7 +115,7 @@ const Storage = {
         return projects || [];
     },
 
-    // Migration Tool
+    // Migration Tool (Upload)
     migrateToCloud: async () => {
         // This function explicitly loads LOCAL data to push to cloud.
         let localData = [];
@@ -143,8 +143,45 @@ const Storage = {
         if (error) {
             alert('アップロード失敗: ' + error.message);
         } else {
-            alert('アップロード成功！\nこれでスマホからもデータが見られるようになりました。');
-            location.reload();
+            alert('アップロード成功！');
+            // location.reload(); // Reload not strictly necessary but good for sync
+        }
+    },
+
+    // Download from Cloud
+    syncFromCloud: async () => {
+        if (!supabaseClient) return alert('クラウド接続の設定がありません');
+
+        if (!confirm('クラウドから最新データを取得して、現在の表示を上書き更新しますか？\n（PC内のデータはクラウドの内容に置き換わります）')) return;
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('projects')
+                .select('*')
+                .order('date', { ascending: false });
+
+            if (error) throw error;
+
+            if (data) {
+                const cloudProjects = data.map(Storage.fromDB);
+                App.projects = cloudProjects;
+
+                // Save to local immediately
+                if (window.salesManagerAPI) {
+                    await window.salesManagerAPI.saveData(App.projects);
+                } else {
+                    localStorage.setItem(Storage.KEY, JSON.stringify(App.projects));
+                }
+
+                render();
+                updateClientSuggestions();
+                alert(`クラウドから${cloudProjects.length}件のデータを取得・更新しました！`);
+            } else {
+                alert('クラウドにデータがありませんでした');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('取得失敗: ' + err.message);
         }
     }
 };
