@@ -26,12 +26,18 @@
         <!-- Header -->
         <header class="header">
             <div>
-                <h1>Sales Manager</h1>
+                <h1>Sales Manager <span style="font-size: 0.8rem; opacity: 0.5;">v1.1</span></h1>
                 <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">案件売上・経費管理</p>
             </div>
-            <button id="fetchQuotationsBtn" class="btn-primary">
-                <i class="fas fa-sync"></i> freeeから見積書を取得
-            </button>
+            <div style="display: flex; gap: 0.5rem;">
+                <button id="btnCloudSyncHeader" class="btn" onclick="Storage.migrateToCloud()"
+                    style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">
+                    ☁️ 保存 (同期)
+                </button>
+                <button id="fetchQuotationsBtn" class="btn-primary">
+                    <i class="fas fa-sync"></i> freeeから見積書を取得
+                </button>
+            </div>
         </header>
 
         <!-- Navigation Tabs -->
