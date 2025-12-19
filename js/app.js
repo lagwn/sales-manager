@@ -13,48 +13,131 @@ const App = {
     }
 };
 
+// --- Supabase Config ---
+const SUPABASE_URL = 'https://pzkpccnfsepactoodtxp.supabase.co';
+const SUPABASE_KEY = 'sb_secret_bgh2UJN5Hb6ukgLKSQN0FA_-CdNxeFl'; // 本来は anon public key (ey...) を使用推奨。動かない場合は確認してください。
+
+let supabase = null;
+if (window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
 // --- Storage Manager ---
 const Storage = {
     KEY: 'sales_manager_data_v1',
-    save: async (data) => {
-        if (window.salesManagerAPI) {
-            const res = await window.salesManagerAPI.saveData(data);
-            if (!res.success) {
-                alert(`保存失敗: ${res.error}`);
-            } else {
-                // alert(`保存成功: ${res.path}`); // 頻繁に出るとうるさいのでコメントアウト可だが今回はデバッグのため出す
-                console.log('Saved to', res.path);
+    mode: 'supabase', // 'local' or 'supabase'
+
+    // Mapper: DB(snake_case) <-> App(camelCase)
+    toDB: (p) => ({
+        id: p.id,
+        name: p.name,
+        client: p.client,
+        date: p.date,
+        sales: p.sales,
+        expenses: p.expenses,
+        note: p.note,
+        is_invoiced: p.isInvoiced,
+        is_paid: p.isPaid
+    }),
+    fromDB: (d) => ({
+        id: parseInt(d.id),
+        name: d.name,
+        client: d.client,
+        date: d.date,
+        sales: d.sales,
+        expenses: d.expenses,
+        note: d.note,
+        isInvoiced: d.is_invoiced,
+        isPaid: d.is_paid
+    }),
+
+    save: async (dataOrItem) => {
+        // Supabase Mode (Save single item or batch?)
+        // For efficiency, we should upsert changed items. 
+        // But the current app passes the ENTIRE array every time.
+        // We will try to upsert ALL for now (simpler migration), but warning: inefficient for large data.
+        // Recommendation: Change app logic to save only changed item.
+
+        // However, to keep it working with existing logic:
+        if (Storage.mode === 'supabase' && supabase) {
+            try {
+                // Determine if it's a full array or single item? 
+                // The app currently passes Full Array.
+                const list = Array.isArray(dataOrItem) ? dataOrItem : [dataOrItem];
+
+                // Convert to DB format
+                const dbData = list.map(Storage.toDB);
+
+                const { error } = await supabase
+                    .from('projects')
+                    .upsert(dbData);
+
+                if (error) throw error;
+                console.log('Saved to Supabase');
+            } catch (err) {
+                console.error('Supabase Save Error:', err);
+                alert('クラウド保存エラー: ' + err.message);
             }
+        }
+
+        // Also save to Local/Electron as backup/offline
+        if (window.salesManagerAPI) {
+            window.salesManagerAPI.saveData(dataOrItem);
         } else {
-            localStorage.setItem(Storage.KEY, JSON.stringify(data));
+            localStorage.setItem(Storage.KEY, JSON.stringify(dataOrItem));
         }
     },
+
     load: async () => {
-        if (window.salesManagerAPI) {
-            const data = await window.salesManagerAPI.loadData();
+        let projects = [];
 
-            // エラーチェック
-            if (data && data.error) {
-                alert(`読み込みエラー: ${data.error}\n詳細: ${data.detail}\nパス: ${data.path}`);
-                return [];
-            }
+        // 1. Try Supabase
+        if (Storage.mode === 'supabase' && supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('projects')
+                    .select('*')
+                    .order('date', { ascending: false });
 
-            if (Array.isArray(data)) {
-                return data;
-            }
-
-            // localStorageから移行（初回用）
-            if ((!data || data.length === 0)) {
-                const localStr = localStorage.getItem(Storage.KEY);
-                if (localStr) {
-                    const localData = JSON.parse(localStr);
-                    if (localData.length > 0) return localData;
+                if (error) throw error;
+                if (data) {
+                    projects = data.map(Storage.fromDB);
                 }
+            } catch (err) {
+                console.error('Supabase Load Error:', err);
+                // alert('クラウド読み込みエラー: ' + err.message + '\nローカルデータを使用します。');
+                // Fallback will happen below if projects is empty
             }
-            return data || [];
+        }
+
+        // 2. Fallback / Local
+        if (projects.length === 0) {
+            if (window.salesManagerAPI) {
+                const data = await window.salesManagerAPI.loadData();
+                if (Array.isArray(data) && data.length > 0) projects = data;
+            } else {
+                const str = localStorage.getItem(Storage.KEY);
+                if (str) projects = JSON.parse(str);
+            }
+        }
+
+        return projects || [];
+    },
+
+    // Migration Tool
+    migrateToCloud: async () => {
+        if (!confirm('現在表示されているデータをクラウド(Supabase)にアップロードして上書きしますか？')) return;
+
+        const currentData = App.projects;
+        if (currentData.length === 0) return alert('データがありません');
+
+        const dbData = currentData.map(Storage.toDB);
+        const { error } = await supabase.from('projects').upsert(dbData);
+
+        if (error) {
+            alert('アップロード失敗: ' + error.message);
         } else {
-            const str = localStorage.getItem(Storage.KEY);
-            return str ? JSON.parse(str) : [];
+            alert('アップロード成功！');
         }
     }
 };

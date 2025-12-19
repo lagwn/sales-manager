@@ -103,6 +103,10 @@
                 <button id="btnExport" class="btn" style="background: white; color: #333;">
                     <span>Excel出力</span>
                 </button>
+                <button id="btnCloudSync" class="btn" onclick="Storage.migrateToCloud()"
+                    style="background: #e0f2fe; color: #0284c7;" title="データをクラウドに保存">
+                    <span>☁️ 保存</span>
+                </button>
             </div>
         </div>
 
@@ -237,6 +241,8 @@
         </div>
     </div>
 
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
