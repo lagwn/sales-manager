@@ -703,7 +703,8 @@ function render() {
 
 // Global function to toggle invoice status
 window.toggleInvoice = (id) => {
-    const p = App.projects.find(x => x.id === id);
+    const numId = Number(id);
+    const p = App.projects.find(x => x.id === numId);
     if (p) {
         p.isInvoiced = !p.isInvoiced;
         Storage.save(App.projects);
@@ -712,7 +713,8 @@ window.toggleInvoice = (id) => {
 };
 
 window.togglePaid = (id) => {
-    const p = App.projects.find(x => x.id === id);
+    const numId = Number(id);
+    const p = App.projects.find(x => x.id === numId);
     if (p) {
         p.isPaid = !p.isPaid;
         Storage.save(App.projects);

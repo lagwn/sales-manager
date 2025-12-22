@@ -252,13 +252,14 @@ tr:last-child td {
     display: none;
 }
 
-/* Invoiced Row Style */
+/* Invoiced Row Style - 請求済み: 薄い黄色 */
 .invoiced-row {
-    background-color: rgba(224, 242, 254, 0.8) !important;
-    /* Light Blue */
-}
-
-.paid-row {
     background-color: rgba(254, 249, 195, 0.8) !important;
     /* Light Yellow */
+}
+
+/* Paid Row Style - 入金済み: 薄い水色 */
+.paid-row {
+    background-color: rgba(224, 242, 254, 0.8) !important;
+    /* Light Blue */
 }
