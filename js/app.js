@@ -5,7 +5,6 @@
 // --- State ---
 const App = {
     projects: [],
-    selectedForInvoice: new Set(),
     filter: {
         startDate: '',
         endDate: '',
@@ -409,22 +408,6 @@ function setupEventListeners() {
         render();
     });
 
-    // freee請求書作成
-    document.getElementById('btnCreateFreeeInvoice').addEventListener('click', createFreeeInvoices);
-    document.getElementById('selectAllForFreee').addEventListener('change', (e) => {
-        const checkboxes = document.querySelectorAll('.freee-invoice-check');
-        checkboxes.forEach(cb => {
-            cb.checked = e.target.checked;
-            const id = Number(cb.dataset.id);
-            if (e.target.checked) {
-                App.selectedForInvoice.add(id);
-            } else {
-                App.selectedForInvoice.delete(id);
-            }
-        });
-        updateFreeeInvoiceButton();
-    });
-
     // Export
     document.getElementById('btnExport').addEventListener('click', exportToExcel);
 
@@ -688,9 +671,6 @@ function render() {
 
             tr.innerHTML = `
                 <td style="text-align: center;" onclick="event.stopPropagation()">
-                    <input type="checkbox" class="freee-invoice-check" data-id="${p.id}" ${App.selectedForInvoice.has(p.id) ? 'checked' : ''} onchange="toggleInvoiceSelect('${p.id}')">
-                </td>
-                <td style="text-align: center;" onclick="event.stopPropagation()">
                     <input type="checkbox" ${p.isInvoiced ? 'checked' : ''} onchange="toggleInvoice('${p.id}')">
                 </td>
                 <td style="text-align: center;" onclick="event.stopPropagation()">
@@ -741,76 +721,6 @@ window.togglePaid = (id) => {
         render(); // Re-render to update background color
     }
 };
-
-// --- freee請求書作成 ---
-window.toggleInvoiceSelect = (id) => {
-    const numId = Number(id);
-    if (App.selectedForInvoice.has(numId)) {
-        App.selectedForInvoice.delete(numId);
-    } else {
-        App.selectedForInvoice.add(numId);
-    }
-    updateFreeeInvoiceButton();
-};
-
-function updateFreeeInvoiceButton() {
-    const btn = document.getElementById('btnCreateFreeeInvoice');
-    const label = document.getElementById('freeeInvoiceLabel');
-    const count = App.selectedForInvoice.size;
-    if (count > 0) {
-        btn.disabled = false;
-        label.textContent = `freee請求書作成 (${count}件)`;
-    } else {
-        btn.disabled = true;
-        label.textContent = 'freee請求書作成';
-    }
-}
-
-function getLastDayOfPreviousMonth() {
-    const now = new Date();
-    const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-    const y = lastDay.getFullYear();
-    const m = (lastDay.getMonth() + 1).toString().padStart(2, '0');
-    const d = lastDay.getDate().toString().padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-
-function createFreeeInvoices() {
-    if (App.selectedForInvoice.size === 0) return;
-
-    const selected = App.projects.filter(p => App.selectedForInvoice.has(p.id));
-    const invoiceDate = getLastDayOfPreviousMonth();
-
-    let summary = `【freee請求書作成】\n`;
-    summary += `請求書日付: ${invoiceDate}\n`;
-    summary += `対象案件 (${selected.length}件):\n`;
-    selected.forEach((p, i) => {
-        summary += `  ${i + 1}. ${p.name} / ${p.client} / ¥${parseInt(p.sales).toLocaleString()}\n`;
-    });
-    summary += `\nこの内容でfreeeの見積書と照合し、請求書を作成しますか？`;
-
-    if (!confirm(summary)) return;
-
-    // 選択された案件情報をグローバルに保存（Claude MCP連携用）
-    window._freeeInvoiceRequest = {
-        invoiceDate: invoiceDate,
-        projects: selected.map(p => ({
-            id: p.id,
-            name: p.name,
-            client: p.client,
-            sales: p.sales,
-            date: p.date
-        }))
-    };
-
-    alert(
-        `以下の案件がfreee請求書作成の対象として登録されました。\n\n` +
-        `請求書日付: ${invoiceDate}\n` +
-        `対象: ${selected.length}件\n\n` +
-        `Claudeに「請求書を作成して」と指示してください。\n` +
-        `freee MCPを通じて見積書の照合と請求書変換を行います。`
-    );
-}
 
 // Chart Instance
 let myChart = null;
